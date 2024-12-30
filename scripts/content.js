@@ -1,148 +1,155 @@
-(() => {
-    console.log("Extension Loaded");
+console.log("Extension Loaded");
 
-    /* ******** GLOBAL VARIABLES ******** */
+/* ******** CONSTANTS ******** */
 
-    const SUBMISSION_STATUS_SELECTOR = '[data-e2e-locator="submission-result"]';
-    const COMPILE_ERROR_SELECTOR = '[data-e2e-locator="console-result"]';
-    const SUBMIT_BUTTON_SELECTOR = '[data-e2e-locator="console-submit-button"]';
+const SELECTORS = {
+    SUBMISSION_STATUS: '[data-e2e-locator="submission-result"]',
+    COMPILE_ERROR: '[data-e2e-locator="console-result"]',
+    SUBMIT_BUTTON: '[data-e2e-locator="console-submit-button"]',
+    RUNTIME_CONTAINER: '.rounded-sd.group.flex.min-w-\\[275px\\].flex-1.cursor-pointer.bg-sd-accent',
+    MEMORY_CONTAINER: '.rounded-sd.group.flex.min-w-\\[275px\\].flex-1.cursor-pointer.opacity-40',
+    CODE_TYPE: 'code[class^="language-"]',
+};
 
-    let currentBaseUrl = extractBaseUrl(); // Track the base part of the URL
-    let isInitialized = false; // Ensure the script initializes only once per page
+/* ******** UTILS ******** */
 
-    /* ******** UTILS ******** */
-
-    // Utility function to wait for an element to appear
-    async function waitForElement(selector, timeout = 30000) {
-        return new Promise((resolve, reject) => {
-            const startTime = Date.now();
-
-            const checkForElement = () => {
-                const element = document.querySelector(selector);
-                if (element) {
-                    resolve(element);
-                } else if (Date.now() - startTime > timeout) {
-                    reject(new Error(`Timeout waiting for selector: ${selector}`));
-                } else {
-                    requestAnimationFrame(checkForElement);
-                }
-            };
-            checkForElement();
-        });
-    }
-
-    // Extract the base part of the URL (e.g., /problems/reverse-integer)
-    function extractBaseUrl() {
-        const url = new URL(window.location.href);
-        const pathParts = url.pathname.split("/");
-        return `/${pathParts[1]}/${pathParts[2]}`; // Returns `/problems/<problem-name>`
-    }
-
-    /* ******** HELPERS ******** */
-
-    // Monitor submission result for "Accepted" or "Compile Error"
-    async function monitorSubmissionResult() {
-        console.log("Monitoring for submission result...");
-
-        try {
-            const compileErrorPromise = waitForElement(COMPILE_ERROR_SELECTOR, 30000)
-                .then((element) => {
-                    if (element.textContent.includes("Compile Error")) {
-                        console.log("Compile Error Detected:", element.textContent);
-                        // alert("Compile Error Detected!");
-                        return { type: "compileError", element };
-                    }
-                });
-
-            const submissionStatusPromise = waitForElement(SUBMISSION_STATUS_SELECTOR, 30000)
-                .then((element) => {
-                    console.log("Submission status detected:", element.textContent);
-                    return { type: "submissionStatus", element };
-                });
-
-            // Wait for the first result
-            const result = await Promise.race([compileErrorPromise, submissionStatusPromise]);
-
-            if (result?.type === "compileError") {
-                console.log("Compile Error Handling Complete.");
-            } else if (result?.type === "submissionStatus") {
-                const submissionStatus = result.element;
-                if (submissionStatus.textContent.includes("Accepted")) {
-                    console.log("Solution Accepted");
-                    // alert("Your solution was Accepted! 🎉");
-                } else {
-                    console.log("Submission result:", submissionStatus.textContent);
-                    // alert(`Submission result: ${submissionStatus.textContent}`);
-                }
-            }
-        } catch (error) {
-            console.error("Error during submission monitoring:", error.message);
-        } finally {
-            console.log("*******************");
-            // Allow reinitialization after the submission is handled
-            console.log("Reinitializing script after submission...");
-            isInitialized = false; // Reset the flag for reinitialization
-            init(); // Reinitialize for subsequent submissions
-        }
-    }
-
-    // Initialize the script and attach listeners
-    const init = async () => {
-        if (isInitialized) {
-            console.log("Script already initialized. Skipping...");
-            return; // Prevent duplicate initialization
-        }
-
-        isInitialized = true; // Mark the script as initialized
-        console.log(`Initializing script for URL: ${currentBaseUrl}`);
-
-        try {
-            const submitButton = await waitForElement(SUBMIT_BUTTON_SELECTOR, 30000);
-            console.log("Checking for submit button");
-            if (submitButton) {
-                console.log("Submit button detected");
-
-                // Remove existing listeners before adding a new one
-                submitButton.removeEventListener("click", handleSubmitButtonClick);
-
-                // Add a click event listener for the "Submit" button
-                submitButton.addEventListener("click", handleSubmitButtonClick, { once: true });
-            }
-        } catch (error) {
-            console.error(error.message);
-        }
-    };
-
-    // Handle the "Submit" button click
-    const handleSubmitButtonClick = async () => {
-        console.log("Submit button clicked!");
-        console.log("Waiting for result...");
-
-        // Monitor for submission results
-        await monitorSubmissionResult();
-    };
-
-    /* ******** MUTATION OBSERVER ******** */
-
-    const observer = new MutationObserver(() => {
-        const newBaseUrl = extractBaseUrl();
-        if (newBaseUrl !== currentBaseUrl) {
-            currentBaseUrl = newBaseUrl;
-            console.log("Base URL changed to:", currentBaseUrl);
-
-            // Reinitialize the script when the base URL changes
-            if (currentBaseUrl.includes("/problems/")) {
-                console.log("*******************");
-                console.log("Reinitializing script due to base URL change...");
-                isInitialized = false; // Reset initialization flag
-                init(); // Reinitialize for the new URL
-            }
-        }
+const waitForElement = (selector, timeout = 30000) =>
+    new Promise((resolve, reject) => {
+        const start = Date.now();
+        const checkElement = () => {
+            const element = document.querySelector(selector);
+            if (element) resolve(element);
+            else if (Date.now() - start > timeout) reject(new Error(`Timeout waiting for selector: ${selector}`));
+            else requestAnimationFrame(checkElement);
+        };
+        checkElement();
     });
 
-    // Start observing DOM changes for URL updates
-    observer.observe(document.body, { childList: true, subtree: false });
+const extractBaseUrl = () => {
+    const urlParts = window.location.pathname.split("/");
+    return `/${urlParts[1]}/${urlParts[2]}`;
+};
 
-    // Call the initialization function on script load
+/* ******** GLOBAL VARIABLES ******** */
+let currentBaseUrl = extractBaseUrl();
+let isInitialized = false;
+
+/* ******** HANDLERS ******** */
+
+const handleSubmitButtonClick = async () => {
+    console.log("Submit button clicked, monitoring submission result...");
+    await monitorSubmissionResult();
+};
+
+const monitorSubmissionResult = async () => {
+    try {
+        const result = await Promise.race([
+            waitForElement(SELECTORS.COMPILE_ERROR, 30000).then((el) => ({
+                type: "compileError",
+                element: el,
+            })),
+            waitForElement(SELECTORS.SUBMISSION_STATUS, 30000).then((el) => ({
+                type: "submissionStatus",
+                element: el,
+            })),
+        ]);
+
+        if (result.type === "compileError") {
+            console.error("Compile Error:", result.element.textContent);
+        } else if (result.type === "submissionStatus") {
+            const statusText = result.element.textContent;
+            console.log("Submission Status:", statusText);
+
+            if (statusText.includes("Accepted")) {
+                console.log("Solution Accepted. Collecting submission data...");
+                await collectSubmissionData();
+            }
+        }
+    } catch (error) {
+        console.error("Error monitoring submission:", error.message);
+    } finally {
+        reinitialize();
+    }
+};
+
+const collectSubmissionData = async () => {
+    try {
+        const runtimeData = await extractPerformanceData(SELECTORS.RUNTIME_CONTAINER);
+        const memoryData = await extractPerformanceData(SELECTORS.MEMORY_CONTAINER);
+        const { codeType, codeContent } = await extractCodeData();
+
+        const submissionData = {
+            Runtime: runtimeData,
+            Memory: memoryData,
+            "Code Type": codeType,
+            Code: codeContent,
+        };
+
+        console.log("Submission Data Collected:", submissionData);
+    } catch (error) {
+        console.error("Error collecting submission data:", error.message);
+    }
+};
+
+const extractPerformanceData = async (containerSelector) => {
+    const container = await waitForElement(containerSelector, 30000);
+    if (!container) return { Value: "", Beats: "" };
+
+    const value = container.querySelector("span.text-lg.font-semibold")?.innerText || "";
+    const unit = container.querySelector("span.text-sd-muted-foreground.text-sm")?.innerText || "";
+    const beats = container.querySelectorAll("span.text-lg.font-semibold")[1]?.innerText || "";
+
+    return {
+        Value: value && unit ? `${value} ${unit}` : "",
+        Beats: beats,
+    };
+};
+
+const extractCodeData = async () => {
+    const codeElement = await waitForElement(SELECTORS.CODE_TYPE, 30000);
+    if (!codeElement) return { codeType: "", codeContent: "" };
+
+    const codeType = codeElement.className.split(" ").find((cls) => cls.startsWith("language-"))?.replace("language-", "") || "";
+    const codeContent = codeElement.innerText.trim();
+
+    return { codeType, codeContent };
+};
+
+/* ******** INITIALIZATION ******** */
+
+const init = async () => {
+    if (isInitialized) return;
+    isInitialized = true;
+    console.log(`Initializing script for URL: ${currentBaseUrl}`);
+
+    try {
+        const submitButton = await waitForElement(SELECTORS.SUBMIT_BUTTON, 30000);
+        if (submitButton) {
+            console.log("Submit button detected, attaching click handler...");
+            submitButton.addEventListener("click", handleSubmitButtonClick, { once: true });
+        }
+    } catch (error) {
+        console.error("Error initializing script:", error.message);
+    }
+};
+
+const reinitialize = () => {
+    console.log("Reinitializing script...");
+    isInitialized = false;
     init();
-})();
+};
+
+/* ******** MUTATION OBSERVER ******** */
+
+new MutationObserver(() => {
+    const newBaseUrl = extractBaseUrl();
+    if (newBaseUrl !== currentBaseUrl) {
+        console.log("URL changed. Reinitializing script...");
+        currentBaseUrl = newBaseUrl;
+        if (currentBaseUrl.includes("/problems/")) reinitialize();
+    }
+}).observe(document.body, { childList: true, subtree: false });
+
+/* ******** SCRIPT START ******** */
+
+init();
