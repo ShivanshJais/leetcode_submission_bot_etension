@@ -11,7 +11,7 @@
     "content_scripts": [
       {
         "matches": ["https://leetcode.com/*"],
-        "js": ["scripts/contentV2.js"]
+        "js": ["scripts/content.js"]
       }
     ],
     "background": {
